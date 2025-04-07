@@ -101,7 +101,7 @@ async def extract_json(image_request: ImageRequest):
         return {
             "success": True,
             "data": formatted_data,
-            "message": "Successfully extracted structured JSON from image using LLaMA 4"
+            "message": "Successfully extracted structured JSON from image and I have used LLAMA 4 for text extraction"
         }
 
     except Exception as e:
