@@ -1,36 +1,50 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from PIL import Image
 import base64
 from io import BytesIO
-from PIL import Image
-import pytesseract
 import json
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+import torch
 
+# Initialize FastAPI app
 app = FastAPI()
 
+# Load Hugging Face OCR model & processor
+processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-printed")
+model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-printed")
+
+# Input model
 class ImageRequest(BaseModel):
     imageBase64: str
 
 @app.post("/")
 async def extract_json(image_request: ImageRequest):
     try:
-        # Clean base64 string
+        # Decode the base64 image
         image_data = image_request.imageBase64.split(",")[-1]
         image_bytes = base64.b64decode(image_data)
-        image = Image.open(BytesIO(image_bytes))
+        image = Image.open(BytesIO(image_bytes)).convert("RGB")
 
-        # Extract text from image
-        extracted_text = pytesseract.image_to_string(image)
+        # Use Hugging Face TrOCR to extract text
+        pixel_values = processor(images=image, return_tensors="pt").pixel_values
+        generated_ids = model.generate(pixel_values)
+        generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-        # Parse JSON
-        extracted_json = json.loads(extracted_text)
+        # Try parsing the generated text as JSON
+        parsed = json.loads(generated_text)
 
         return {
             "success": True,
-            "data": extracted_json,
+            "data": parsed,
             "message": "Successfully extracted JSON from image"
         }
+
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Unable to parse JSON from image")
+        return {
+            "success": False,
+            "data": None,
+            "message": "OCR worked, but couldn't parse valid JSON."
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
