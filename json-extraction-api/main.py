@@ -6,6 +6,14 @@ from io import BytesIO
 import json
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 import torch
+from huggingface_hub import login
+import os
+from dotenv import load_dotenv
+
+# Loaded .env
+load_dotenv() 
+
+login(os.getenv("OCR_API"))
 
 # Initialize FastAPI app
 app = FastAPI()
