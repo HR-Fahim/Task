@@ -4,7 +4,7 @@ from PIL import Image
 import base64
 from io import BytesIO
 import json
-from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+from transformers import AutoProcessor, AutoModelForVision2Seq
 import torch
 from huggingface_hub import login
 import os
@@ -15,31 +15,39 @@ load_dotenv()
 
 login(os.getenv("OCR_API"))
 
-# Initialize FastAPI app
 app = FastAPI()
 
-# Load Hugging Face OCR model & processor
-processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-printed")
-model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-printed")
+# Load Callisto-OCR3-2B-Instruct model and processor
+processor = AutoProcessor.from_pretrained("prithivMLmods/Callisto-OCR3-2B-Instruct")
+model = AutoModelForVision2Seq.from_pretrained("prithivMLmods/Callisto-OCR3-2B-Instruct").eval()
 
-# Input model
+# Use GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+# Input schema
 class ImageRequest(BaseModel):
     imageBase64: str
 
 @app.post("/")
 async def extract_json(image_request: ImageRequest):
     try:
-        # Decode the base64 image
+        # Decode base64 image
         image_data = image_request.imageBase64.split(",")[-1]
         image_bytes = base64.b64decode(image_data)
         image = Image.open(BytesIO(image_bytes)).convert("RGB")
 
-        # Use Hugging Face TrOCR to extract text
-        pixel_values = processor(images=image, return_tensors="pt").pixel_values
-        generated_ids = model.generate(pixel_values)
+        # Build instruction prompt (as per model's expected input)
+        prompt = "Extract and return the data in JSON format from this image."
+
+        # Preprocess image and prompt
+        inputs = processor(images=image, text=prompt, return_tensors="pt").to(device)
+
+        # Generate output from model
+        generated_ids = model.generate(**inputs, max_new_tokens=512)
         generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-        # Try parsing the generated text as JSON
+        # Attempt to parse as JSON
         parsed = json.loads(generated_text)
 
         return {
@@ -51,7 +59,7 @@ async def extract_json(image_request: ImageRequest):
     except json.JSONDecodeError:
         return {
             "success": False,
-            "data": None,
+            "data": generated_text,
             "message": "OCR worked, but couldn't parse valid JSON."
         }
     except Exception as e:
