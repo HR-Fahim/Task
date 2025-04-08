@@ -22,78 +22,36 @@ app = FastAPI()
 class ImageRequest(BaseModel):
     imageBase64: str
 
-# Clean and format values
-def clean_value(value: str) -> str:
-    if not value:
-        return None
-    return value.strip(" \":,")  # Strips unwanted chars from both ends
-
-def format_response_to_json(text: str):
-    # Try JSON parsing first
-    try:
-        parsed = json.loads(text)
-        return {
-            "name": clean_value(parsed.get("name")),
-            "organization": clean_value(parsed.get("organization")),
-            "address": clean_value(parsed.get("address")),
-            "mobile": clean_value(parsed.get("mobile")),
-        }
-    except json.JSONDecodeError:
-        pass
-
-    # Fallback: regex-based extraction
-    name_match = re.search(r"(?:Name|Full Name)[^\w]*[:\-]?\s*(.*)", text, re.IGNORECASE)
-    org_match = re.search(r"(?:Organization|Company|Institute)[^\w]*[:\-]?\s*(.*)", text, re.IGNORECASE)
-    address_match = re.search(r"(?:Address)[^\w]*[:\-]?\s*(.*)", text, re.IGNORECASE)
-    mobile_match = re.search(r"(?:Mobile|Phone|Tel|Contact)[^\w]*[:\-]?\s*(.*)", text, re.IGNORECASE)
-
-    return {
-        "name": clean_value(name_match.group(1)) if name_match else None,
-        "organization": clean_value(org_match.group(1)) if org_match else None,
-        "address": clean_value(address_match.group(1)) if address_match else None,
-        "mobile": clean_value(mobile_match.group(1)) if mobile_match else None,
-    }
 
 # Convert transparent images to white background with better handling
 def handle_transparency(base64_image: str) -> str:
-    # Remove the data prefix if present
     header_removed = base64_image.split(",")[-1]
     image_bytes = base64.b64decode(header_removed)
     image = Image.open(BytesIO(image_bytes))
 
-    # Ensure the image is in RGBA mode
     if image.mode != "RGBA":
         image = image.convert("RGBA")
 
-    # Prepare a white background
     background = Image.new("RGBA", image.size, (255, 255, 255, 255))
-
-    # Composite the image on top of the white background using the alpha channel as the mask
     image = Image.alpha_composite(background, image)
-
-    # Convert to RGB to remove the alpha channel
     image = image.convert("RGB")
 
-    # Optionally enhance contrast and sharpness to help with text detection
     enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2)  # Increase contrast
+    image = enhancer.enhance(2)
 
-    # Sharpen the image to improve text clarity
     sharpness_enhancer = ImageEnhance.Sharpness(image)
-    image = sharpness_enhancer.enhance(2)  # Sharpen the image
+    image = sharpness_enhancer.enhance(2)
 
-    # Save as PNG again
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     processed_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
     return "data:image/png;base64," + processed_base64
 
 @app.post("/")
-async def extract_json(image_request: ImageRequest):
+def extract_json(image_request: ImageRequest):
     try:
         image_data = handle_transparency(image_request.imageBase64.strip())
 
-        # LLaMA 4 request
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -108,7 +66,7 @@ async def extract_json(image_request: ImageRequest):
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Extract the following information from the image and return as JSON:\n- name\n- organization\n- address\n- mobile"
+                                "text": "Only extract the text and show in exact JSON format. Do not use words like 'json' or sysmbols like ```"
                             },
                             {
                                 "type": "image_url",
@@ -128,7 +86,13 @@ async def extract_json(image_request: ImageRequest):
         result = response.json()
         llama_text = result["choices"][0]["message"]["content"]
 
-        formatted_data = format_response_to_json(llama_text)
+        print(llama_text) 
+
+        # formatted_data = json.dumps(llama_text, indent=4)
+
+        # formatted_data = format_response_to_json(llama_text)
+
+        formatted_data = json.loads(llama_text)
 
         return {
             "success": True,
