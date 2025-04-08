@@ -1,0 +1,22 @@
+name: Track Deployment Page
+
+on:
+  schedule:
+    # Run every 10 minutes so that Render free deployment doesn't get idle
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-website:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send requests
+        run: |
+          response_code=$(curl -s -o /dev/null -w "%{http_code}" https://custom-ai-agent.onrender.com)
+          echo "Response Code: $response_code"
+          
+          if [[ "$response_code" -ne 200 ]]; then
+            echo "Warning: The website returned a non-200 status code"
+          else
+            echo "Website is up and running!"
