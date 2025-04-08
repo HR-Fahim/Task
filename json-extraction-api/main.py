@@ -6,6 +6,8 @@ import os
 import re
 from dotenv import load_dotenv
 import requests
+from PIL import Image, ImageEnhance
+from io import BytesIO
 
 # Load .env
 load_dotenv()
@@ -22,7 +24,7 @@ app = FastAPI()
 class ImageRequest(BaseModel):
     imageBase64: str
 
-# Helper function to extract structured JSON
+# Clean and format values
 def clean_value(value: str) -> str:
     if not value:
         return None
@@ -54,10 +56,44 @@ def format_response_to_json(text: str):
         "mobile": clean_value(mobile_match.group(1)) if mobile_match else None,
     }
 
+# Convert transparent images to white background with better handling
+def handle_transparency(base64_image: str) -> str:
+    # Remove the data prefix if present
+    header_removed = base64_image.split(",")[-1]
+    image_bytes = base64.b64decode(header_removed)
+    image = Image.open(BytesIO(image_bytes))
+
+    # Ensure the image is in RGBA mode
+    if image.mode != "RGBA":
+        image = image.convert("RGBA")
+
+    # Prepare a white background
+    background = Image.new("RGBA", image.size, (255, 255, 255, 255))
+
+    # Composite the image on top of the white background using the alpha channel as the mask
+    image = Image.alpha_composite(background, image)
+
+    # Convert to RGB to remove the alpha channel
+    image = image.convert("RGB")
+
+    # Optionally enhance contrast and sharpness to help with text detection
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(2)  # Increase contrast
+
+    # Sharpen the image to improve text clarity
+    sharpness_enhancer = ImageEnhance.Sharpness(image)
+    image = sharpness_enhancer.enhance(2)  # Sharpen the image
+
+    # Save as PNG again
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    processed_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return "data:image/png;base64," + processed_base64
+
 @app.post("/")
 async def extract_json(image_request: ImageRequest):
     try:
-        image_data = image_request.imageBase64.strip()
+        image_data = handle_transparency(image_request.imageBase64.strip())
 
         # LLaMA 4 request
         response = requests.post(
