@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import base64
 import json
@@ -9,21 +10,33 @@ import requests
 from PIL import Image, ImageEnhance
 from io import BytesIO
 
-# Load .env
+# Load environment variables from .env
 load_dotenv()
 
-# API & Site details
+# API key from .env
 OPENROUTER_API_KEY = os.getenv("API_KEY")
 
-# FastAPI app
+# FastAPI app initialization
 app = FastAPI()
 
-# Input model
+# CORS Middleware Configuration
+origins = [
+    "https://json-extraction-challenge.intellixio.com",  # Add your frontend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,             # Allow your frontend
+    allow_credentials=True,
+    allow_methods=["*"],               # Allow all HTTP methods (POST, OPTIONS, etc.)
+    allow_headers=["*"],              # Allow all headers including Content-Type
+)
+
+# Input model for request body
 class ImageRequest(BaseModel):
     imageBase64: str
 
-
-# Convert transparent images to white background with better handling
+# Convert transparent images to white background and enhance
 def handle_transparency(base64_image: str) -> str:
     header_removed = base64_image.split(",")[-1]
     image_bytes = base64.b64decode(header_removed)
@@ -47,6 +60,7 @@ def handle_transparency(base64_image: str) -> str:
     processed_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
     return "data:image/png;base64," + processed_base64
 
+# Endpoint to handle JSON extraction
 @app.post("/")
 def extract_json(image_request: ImageRequest):
     try:
@@ -66,7 +80,7 @@ def extract_json(image_request: ImageRequest):
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Only extract the text and show in exact JSON format. Do not use words like 'json' or sysmbols like ```"
+                                "text": "Only extract the text and show in exact JSON format. Do not use words like 'json' or symbols like ```"
                             },
                             {
                                 "type": "image_url",
@@ -85,12 +99,6 @@ def extract_json(image_request: ImageRequest):
 
         result = response.json()
         llama_text = result["choices"][0]["message"]["content"]
-
-        print(llama_text) 
-
-        # formatted_data = json.dumps(llama_text, indent=4)
-
-        # formatted_data = format_response_to_json(llama_text)
 
         formatted_data = json.loads(llama_text)
 
