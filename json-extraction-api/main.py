@@ -89,7 +89,7 @@ def handle_transparency(base64_image: str) -> str:
     return "data:image/png;base64," + processed_base64
 
 @app.post("/")
-def extract_json(image_request: ImageRequest):
+async def extract_json(image_request: ImageRequest):
     try:
         image_data = handle_transparency(image_request.imageBase64.strip())
 
