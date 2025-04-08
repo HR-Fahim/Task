@@ -14,8 +14,6 @@ load_dotenv()
 
 # API & Site details
 OPENROUTER_API_KEY = os.getenv("API_KEY")
-REFERER = os.getenv("REFERER") or "http://localhost"
-SITE_NAME = os.getenv("SITE_NAME") or "JSON Extraction App"
 
 # FastAPI app
 app = FastAPI()
@@ -101,8 +99,6 @@ def extract_json(image_request: ImageRequest):
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": REFERER,
-                "X-Title": SITE_NAME
             },
             data=json.dumps({
                 "model": "meta-llama/llama-4-maverick:free",
