@@ -1,8 +1,8 @@
-name: Track Deployment Page
+name: Keep Render App Alive
 
 on:
   schedule:
-    # Run every 10 minutes so that Render free deployment doesn't get idle
+    # Run every 10 minutes to keep the Render service alive
     - cron: "*/10 * * * *"
   workflow_dispatch:
 
@@ -11,12 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send requests
+      - name: Send requests to Render App
         run: |
-          response_code=$(curl -s -o /dev/null -w "%{http_code}" https://custom-ai-agent.onrender.com)
+          response_code=$(curl -s -o /dev/null -w "%{http_code}" https://task-5dol.onrender.com)
           echo "Response Code: $response_code"
           
           if [[ "$response_code" -ne 200 ]]; then
             echo "Warning: The website returned a non-200 status code"
           else
             echo "Website is up and running!"
+          fi
