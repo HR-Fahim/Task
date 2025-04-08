@@ -2,6 +2,7 @@
 fastapi
 uvicorn
 starlette
+fastapi[all]
 
 # Pydantic for request/response models
 pydantic
