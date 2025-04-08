@@ -11,11 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send requests to Render App
+      - name: Send POST request to Render App
         run: |
-          response_code=$(curl -s -o /dev/null -w "%{http_code}" https://task-5dol.onrender.com)
+          response_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://task-5dol.onrender.com \
+            -H "Content-Type: application/json" \
+            -d '{"key": "value"}')
           echo "Response Code: $response_code"
-          
+
           if [[ "$response_code" -ne 200 ]]; then
             echo "Warning: The website returned a non-200 status code"
           else
